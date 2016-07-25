@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Disk Overflow</title>
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.1.0/css/font-awesome.min.css">
+    <style type="text/css">
+    .query-result {
+        margin-top: 15px;
+        border: 1px solid #000;
+        border-radius:4px;
+        padding:2px;
+        cursor:pointer;
+    }
+
+    .query-result:hover
+    {
+        background-color:#eee;
+    }
+
+    .query-result-header {
+        font-size: 2em;
+        font-style: bold;
+    }
+
+    .query-result-text {
+        padding-left: 30px;
+        background-color:#ccc;
+    }
+
+    .query-result-meta {
+        vertical-align:middle;
+        font-size:2em;
+    }
+
+    #no-results-container {
+        margin-top:15px;
+        font-size:1.5em;
+    }
+
+    .loading-indicator {
+    }
+
+    .inspect-title {
+        font-size:2em;
+        font-style:underline;
+        font-weight:bold;
+    }
+
+    .answer-author {
+        border-bottom: 1px solid #e4e6e8
+    }
+
+    .inspect-body {
+        padding-top:15px;
+    }
+    </style>
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- Leave those next 4 lines if you care about users using IE8 -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+      <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+
+      <div class="container">
+          <div class="row">
+              <div class="col-md-12 text-center">
+                  <h1>Disk Overflow</h1>
+                  <span class="loading-indicator">Done.</span>
+              </div>
+          </div>
+
+          <div class="row">
+              <input class="form-control" type="text" placeholder="Query" id="querybox">
+          </div>
+
+          <div id="back-button-container">
+              <div class="row">
+                  <div class="col-md-12">
+                      <br>
+                      <button id="backbtn" class="btn btn-primary">Back</button>
+                  </div>
+              </div>
+          </div>
+
+          <div id="no-results-container">
+              <div class="row">
+                  <div class="col-md-12 text-center">
+                    <span class="text-muted">No results to display.</span>
+                  </div>
+              </div>
+          </div>
+
+          <h2 id="resultheader"></h2>
+          <div id="query-result-container">
+              <div class="query-result row" style="display: none;">
+                  <div class="col-md-1 query-result-meta">0</div>
+                  <div class="col-md-11">
+                      <div class="query-result-header">Question Title</div>
+                      <div class="query-result-text">Question snippet text</div>
+                  </div>
+              </div>
+          </div>
+
+          <div id="query-inspect-container">
+              <div class="query-inspect row" style="display: none;">
+                  <div class="row">
+                      <div class="col-md-12 inspect-title">
+                          ...
+                      </div>
+                  </div>
+                  <div class="row">
+                      <div class="col-md-6 inspect-body">
+                          ...
+                      </div>
+                  </div>
+              </div>
+
+              <div class="query-inspect-answer row" style="display: none;">
+                  <div class="row">
+                      <div class="col-md-6 inspect-body">
+                          ...
+                      </div>
+                  </div>
+                  <div class="row">
+                      <div class="col-md-6 text-right answer-author">
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </div>
+
+    <!-- Including Bootstrap JS (with its jQuery dependency) so that dynamic components work -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+    <script type="text/javascript">
+    $(function(ready) {
+
+        globals = {
+            runningQuery: false,
+            lastQuery: "",
+            resultCount: 0,
+            viewMode: "resultList", //resultList or inspect
+            inspectId: 0
+        }
+
+        engine = {
+            runQuery: function(query_text, callback) {
+                if(globals.runningQuery) return;
+                globals.lastQuery = query_text;
+                globals.runningQuery = true;
+                postData = { query: query_text }
+                $.post("{{ url_for('query') }}", postData)
+                 .done(function(data)
+                 {
+                     on_query_done(data);
+                     globals.runningQuery = false;
+                 })
+            }
+        }
+
+        query_item_template = $(".query-result").first().clone();
+        $(".query-result").remove();
+
+        query_answer_template = $(".query-inspect-answer").first().clone();
+        $(".query-inspect-answer").remove();
+
+        $("#backbtn").click(function(e) {
+            $(this).hide();
+            $("#query-inspect-container").hide();
+            $("#query-result-container").show();
+        });
+
+        function view_question_id(qid)
+        {
+            $(".query-inspect-answer").remove();
+
+            $(".query-inspect").find(".inspect-title").html("...");
+            $(".query-inspect").find(".inspect-body").html("...");
+
+            $.get("/question/" + qid)
+             .done(function(data) {
+                 data = JSON.parse(data);
+                $(".query-inspect").find(".inspect-title").html(data.question.title);
+                $(".query-inspect").find(".inspect-body").html(data.question.body);
+
+                for(var i = 0; i < data.answers.length; i++)
+                {
+                    console.log(data.answers[i]);
+                    new_answer = query_answer_template.clone()
+                    new_answer.find(".answer-author").html("<a href='//stackoverflow.com/a/" +
+                            data.answers[i].id + "'>" + data.answers[i].author + "</a>");
+                    new_answer.find(".inspect-body").html(data.answers[i].body);
+                    new_answer.css('display', 'block')
+                    $("#query-inspect-container").append(new_answer);
+                }
+            });
+
+            $("#backbtn").show();
+            $("#query-result-container").hide();
+
+            $(".query-inspect").show();
+        }
+
+        function new_query_item(rowid, score, title, snippet)
+        {
+            var elem = query_item_template.clone();
+            elem.css('display', 'block');
+            elem.attr('data-rowid', rowid);
+            elem.find(".query-result-meta").html(score);
+            elem.find(".query-result-header").html(title);
+            elem.find(".query-result-text").html(snippet);
+            elem.click(function(e) {
+                view_question_id($(this).attr('data-rowid'));
+            });
+            return elem;
+        }
+
+        function on_query_done(data)
+        {
+            $("#query-result-container").empty()
+            $("#resultsheader").html("Results for \"" + globals.lastQuery + "\"");
+            data = JSON.parse(data);
+            result_count = data.length;
+
+            if(result_count > 0)
+                $("#no-results-container").hide();
+            else
+                $("#no-results-container").show();
+
+            for(var i = 0; i < data.length; i++)
+            {
+                $("#query-result-container").append(new_query_item(data[i][0], 0, data[i][1], data[i][2]));
+            }
+        }
+
+        function loading_watcher()
+        {
+            //If query is dirty, run again
+            qb_val = $("#querybox").val();
+            if(globals.lastQuery != qb_val && qb_val.length > 3)
+                engine.runQuery(qb_val);
+
+            if(globals.runningQuery){
+                $(".loading-indicator").html("Loading...");
+            }
+            else
+            {
+                $(".loading-indicator").html("Done.");
+            }
+        }
+
+        setInterval(loading_watcher, 100);
+
+    });
+    </script>
+  </body>
+</html>
