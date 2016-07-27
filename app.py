@@ -1,8 +1,8 @@
 from flask import Flask, render_template, request, abort
+from stopwords import stopwords
 import sqlite3
 import json
 import time
-
 
 app = Flask(__name__)
 
@@ -40,23 +40,31 @@ def index():
 @app.route('/query', methods=["POST"])
 def query():
 
-    start = time.time()
     conn = sqlite3.connect("stackoverflow.sqlite3")
     db = conn.cursor()
-    end = time.time()
-    print('opening db took {}s'.format(end-start))
+    db.arraysize = 10
 
     q = request.form.get("query")
+
+    filtered = q.split()
+    filtered = ' '.join([x for x in filtered if x not in stopwords])
+    print(filtered)
 
     if not q:
         abort(404)
 
     start = time.time()
-    db.execute(query_template2, (q,))
+    db.execute(query_template2, (filtered,))
     end = time.time()
     print('query took {}s'.format(end-start))
 
-    return json.dumps(db.fetchall())
+    start = time.time()
+    data = json.dumps(db.fetchall())
+    end = time.time()
+    print('retrieiving took {}s'.format(end-start))
+
+    conn.close()
+    return data
 
 @app.route('/question/<qid>')
 def question(qid):

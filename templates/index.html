@@ -53,11 +53,35 @@
     }
 
     .answer-author {
-        border-bottom: 1px solid #e4e6e8
+        border-bottom: 1px solid #e4e6e8;
+        background-color: #eee;
+        margin-bottom:15px;
+    }
+
+    .answer-metadata {
+        border-bottom: 1px solid #e4e6e8;
+        background-color: #eee;
+        margin-bottom:15px;
     }
 
     .inspect-body {
         padding-top:15px;
+        border-bottom: 1px solid #e4e6e8;
+        font-size:15px;
+    }
+
+    .answer-row {
+        padding-left:20px;
+    }
+
+    pre {
+        border-radius: 2px;
+    }
+    pre code {
+        font-family: Consolas,Menlo,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream
+            Vera Sans Mono,Courier New,monospace,sans-serif;
+        white-space: pre;
+        border-radius:2px;
     }
     </style>
 
@@ -110,8 +134,8 @@
               </div>
           </div>
 
-          <div id="query-inspect-container">
-              <div class="query-inspect row" style="display: none;">
+          <div id="query-inspect-container" style="display: none">
+              <div class="query-inspect row">
                   <div class="row">
                       <div class="col-md-12 inspect-title">
                           ...
@@ -124,14 +148,18 @@
                   </div>
               </div>
 
-              <div class="query-inspect-answer row" style="display: none;">
-                  <div class="row">
+              <div id="query-answer-count">
+              </div>
+
+              <div class="query-inspect-answer row">
+                  <div class="row answer-row">
                       <div class="col-md-6 inspect-body">
                           ...
                       </div>
                   </div>
-                  <div class="row">
-                      <div class="col-md-6 text-right answer-author">
+                  <div class="row answer-row">
+                      <div class="col-md-3 answer-metadata"></div>
+                      <div class="col-md-3 text-right answer-author">
                       </div>
                   </div>
               </div>
@@ -147,6 +175,7 @@
         globals = {
             runningQuery: false,
             lastQuery: "",
+            lastQueryChangeTime: 0,
             resultCount: 0,
             viewMode: "resultList", //resultList or inspect
             inspectId: 0
@@ -155,6 +184,8 @@
         engine = {
             runQuery: function(query_text, callback) {
                 if(globals.runningQuery) return;
+
+
                 globals.lastQuery = query_text;
                 globals.runningQuery = true;
                 postData = { query: query_text }
@@ -177,11 +208,13 @@
             $(this).hide();
             $("#query-inspect-container").hide();
             $("#query-result-container").show();
+            $("#query-answer-count").html('');
         });
 
         function view_question_id(qid)
         {
             $(".query-inspect-answer").remove();
+            $("#query-inspect-container").show();
 
             $(".query-inspect").find(".inspect-title").html("...");
             $(".query-inspect").find(".inspect-body").html("...");
@@ -192,14 +225,23 @@
                 $(".query-inspect").find(".inspect-title").html(data.question.title);
                 $(".query-inspect").find(".inspect-body").html(data.question.body);
 
+                $("#query-answer-count").html("<h3>" + data.answers.length + " Answers </h3>");
                 for(var i = 0; i < data.answers.length; i++)
                 {
                     console.log(data.answers[i]);
+
                     new_answer = query_answer_template.clone()
+
+                    if( data.answers[i].score < 1 )
+                    {
+                        new_answer.addClass("text-muted");
+                        new_answer.find(".inspect-body").css('background-color', '#eee');
+                    }
+
                     new_answer.find(".answer-author").html("<a href='//stackoverflow.com/a/" +
                             data.answers[i].id + "'>" + data.answers[i].author + "</a>");
+                    new_answer.find(".answer-metadata").html("Score: " + data.answers[i].score);
                     new_answer.find(".inspect-body").html(data.answers[i].body);
-                    new_answer.css('display', 'block')
                     $("#query-inspect-container").append(new_answer);
                 }
             });
@@ -242,11 +284,25 @@
             }
         }
 
+        var last_qb_val = ""
         function loading_watcher()
         {
+            var qb_val = $("#querybox").val();
+            var canRun = true;
+
+            if(qb_val != last_qb_val)
+            {
+                globals.lastQueryChangeTime = new Date().getTime();
+            }
+
+            //if query has changed within 1.5 seconds
+            if(new Date().getTime() - globals.lastQueryChangeTime < 750)
+            {
+                canRun = false
+            }
+
             //If query is dirty, run again
-            qb_val = $("#querybox").val();
-            if(globals.lastQuery != qb_val && qb_val.length > 3)
+            if(qb_val != globals.lastQuery && qb_val.length > 3 && canRun)
                 engine.runQuery(qb_val);
 
             if(globals.runningQuery){
@@ -256,9 +312,10 @@
             {
                 $(".loading-indicator").html("Done.");
             }
+            last_qb_val = qb_val;
         }
 
-        setInterval(loading_watcher, 100);
+        setInterval(loading_watcher, 250);
 
     });
     </script>
